@@ -1,100 +1,134 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>VMO Tactics</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<div id="game-container">
-    <div id="modal-overlay" class="hidden">
-        <div id="modal-box">
-            <h3 id="modal-title">Title</h3>
-            <div id="modal-content">Content goes here...</div>
-            <div id="modal-actions">
+    <div id="game-container">
+        <div id="modal-overlay" class="hidden">
+            <div id="modal-box">
+                <h3 id="modal-title">Title</h3>
+                <div id="modal-content">Content goes here...</div>
+                <div id="modal-actions">
                 </div>
+            </div>
+        </div>
+
+        <div id="toast-container"></div>
+
+        <div id="screens">
+
+            <section id="screen-title" class="screen active">
+                <div class="title-logo">
+                    <h1>VMO TACTICS</h1>
+                    <p>Tactical Rogue-lite Auto Battler</p>
+                </div>
+                <div class="menu-buttons">
+                    <button class="btn-primary" onclick="Game.startNewRun()">新しい遠征を始める</button>
+                    <button class="btn-secondary" onclick="Game.showCodex()">図鑑を見る</button>
+                    <button class="btn-secondary" onclick="Game.showSettings()">設定</button>
+                </div>
+                <div class="version-info">Ver 1.0.0</div>
+            </section>
+
+            <section id="screen-starter" class="screen hidden">
+                <header class="screen-header">
+                    <h2>スターターデッキ選択</h2>
+                    <button class="btn-small" onclick="Game.switchScreen('screen-title')">戻る</button>
+                </header>
+                <div id="starter-container" class="scroll-content">
+                </div>
+            </section>
+
+            <section id="screen-map" class="screen hidden">
+                <header class="screen-header">
+                    <div class="header-info">
+                        <span id="map-layer-info">Layer 1</span>
+                        <span id="player-gold">💰 0</span>
+                    </div>
+                    <button class="btn-small" onclick="Game.openSystemMenu()">メニュー</button>
+                </header>
+                <div id="map-visual-area" class="map-area">
+                </div>
+                <div class="map-footer">
+                    <button class="btn-secondary" onclick="Game.switchScreen('screen-title')">タイトルへ</button>
+                    <button class="btn-primary"
+                        onclick="Party.init(); Game.switchScreen('screen-party')">パーティ編成</button>
+                </div>
+            </section>
+
+            <section id="screen-battle" class="screen hidden">
+                <div class="battle-header" style="justify-content: space-between;">
+                    <div class="turn-indicator">Turn <span id="battle-turn">1</span></div>
+                    <div class="speed-controls">
+                        <button id="btn-speed-0" class="btn-tiny" onclick="Battle.setSpeed(0)">⏸</button>
+                        <button id="btn-speed-1" class="btn-tiny selected" onclick="Battle.setSpeed(1)">x1</button>
+                        <button id="btn-speed-2" class="btn-tiny" onclick="Battle.setSpeed(2)">x2</button>
+                        <button id="btn-speed-3" class="btn-tiny" onclick="Battle.setSpeed(3)">x3</button>
+                        <button id="btn-timeout" class="btn-tiny btn-warning"
+                            onclick="Battle.triggerTimeout()">✋</button>
+                    </div>
+                </div>
+
+                <div class="battle-field">
+                    <div id="enemy-grid" class="grid-area"></div>
+
+                    <div class="field-divider">
+                        <button id="btn-start-battle" class="btn-primary"
+                            onclick="Battle.startBattleAction()">戦闘開始</button>
+                    </div>
+
+                    <div id="player-grid" class="grid-area"></div>
+                </div>
+
+                <div class="battle-footer">
+                    <div id="battle-log" class="battle-log">
+                        <p>Battle Start...</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="screen-party" class="screen hidden">
+                <div class="party-header">
+                    <h2>パーティ編成</h2>
+                    <button class="btn-secondary" onclick="Game.switchScreen('screen-map')">戻る</button>
+                </div>
+                <div class="party-container">
+                    <div class="party-section">
+                        <h3>Battle Party (Max 6)</h3>
+                        <div id="party-list" class="party-grid">
+                            <!-- JS Generated -->
+                        </div>
+                    </div>
+                    <div class="box-section">
+                        <h3>Box (Reserve)</h3>
+                        <div id="box-list" class="box-grid">
+                            <!-- JS Generated -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </div>
     </div>
 
-    <div id="toast-container"></div>
-
-    <div id="screens">
-
-        <section id="screen-title" class="screen active">
-            <div class="title-logo">
-                <h1>VMO TACTICS</h1>
-                <p>Tactical Rogue-lite Auto Battler</p>
-            </div>
-            <div class="menu-buttons">
-                <button class="btn-primary" onclick="Game.startNewRun()">新しい遠征を始める</button>
-                <button class="btn-secondary" onclick="Game.showCodex()">図鑑を見る</button>
-                <button class="btn-secondary" onclick="Game.showSettings()">設定</button>
-            </div>
-            <div class="version-info">Ver 1.0.0</div>
-        </section>
-
-        <section id="screen-starter" class="screen hidden">
-            <header class="screen-header">
-                <h2>スターターデッキ選択</h2>
-                <button class="btn-small" onclick="Game.switchScreen('screen-title')">戻る</button>
-            </header>
-            <div id="starter-container" class="scroll-content">
-                </div>
-        </section>
-
-        <section id="screen-map" class="screen hidden">
-            <header class="screen-header">
-                <div class="header-info">
-                    <span id="map-layer-info">Layer 1</span>
-                    <span id="player-gold">💰 0</span>
-                </div>
-                <button class="btn-small" onclick="Game.openSystemMenu()">メニュー</button>
-            </header>
-            <div id="map-visual-area" class="map-area">
-                </div>
-            <footer class="party-status-bar">
-                <div id="mini-party-view">
-                    </div>
-            </footer>
-        </section>
-
-        <section id="screen-battle" class="screen hidden">
-            <div class="battle-header">
-                <div class="turn-indicator">Turn <span id="battle-turn">1</span></div>
-                <div class="speed-controls">
-                    <button class="btn-tiny" onclick="Battle.setSpeed(1)">x1</button>
-                    <button class="btn-tiny" onclick="Battle.setSpeed(2)">x2</button>
-                </div>
-            </div>
-
-            <div class="battle-field">
-                <div id="enemy-grid" class="grid-area"></div>
-                <hr class="field-divider">
-                <div id="player-grid" class="grid-area"></div>
-            </div>
-
-            <div class="battle-footer">
-                <div id="battle-log" class="log-area">
-                    <p>戦闘開始...</p>
-                </div>
-                <button id="btn-timeout" class="btn-warning" onclick="Battle.triggerTimeout()">⏸ タイムアウト</button>
-            </div>
-        </section>
-
-    </div>
-</div>
-
-<script src="monsters.js"></script>
-<script src="moves.js"></script>
-
-<script src="ui.js"></script>
-<script src="mechanics.js"></script>
-<script src="systems.js"></script>
-<script src="map.js"></script>
-<script src="battle.js"></script>
-<script src="main.js"></script>
-
+    <!-- Scripts -->
+    <script src="monsters.js"></script>
+    <script src="moves.js"></script>
+    <script src="ui.js"></script>
+    <script src="mechanics.js"></script>
+    <script src="systems.js"></script>
+    <script src="map.js"></script>
+    <script src="effects.js"></script>
+    <script src="battle.js"></script>
+    <script src="party.js"></script>
+    <script src="main.js"></script>
 </body>
+
 </html>

@@ -7,50 +7,63 @@ const Game = {
   state: {
     currentScreen: 'screen-title',
     player: {
-      gold: 0,
-      party: [],
-      inventory: []
+      gold: 100,
+      party: [], // 現在のパーティメンバー
+      box: [],   // 控えメンバー（BOX）
+      inventory: [],
+      maxPartySize: 6, // 最大数は6
     },
     currentRun: null
   },
-  
+
   // 初期化処理
-  init: function() {
+  init: function () {
     console.log("Initializing VMO Tactics...");
-    
+
     // データの整合性チェック
     if (typeof window.dbMonsters === 'undefined' || typeof window.dbMoves === 'undefined') {
       this.toast("データファイルの読み込みに失敗しました", "error");
       return;
     }
-    
+
     console.log(`Loaded ${window.dbMonsters.length} Monsters and ${Object.keys(window.dbMoves).length} Moves.`);
+
+    // タイトル画面を表示
     this.switchScreen('screen-title');
+
+    // Debug: タイトル画面をスキップして直接ゲーム開始
+    // this.startNewRun();
   },
-  
+
   // --- Screen Management ---
-  switchScreen: function(screenId) {
+  switchScreen: function (screenId) {
     UI.switchScreen(screenId);
   },
-  
+
   // --- Game Logic Stubs ---
-  
-  startNewRun: function() {
+
+  startNewRun: function () {
     // プレイヤー状態リセット
-    this.state.player = { gold: 100, party: [], inventory: [] };
-    
+    this.state.player = {
+      gold: 100,
+      party: [],
+      box: [],
+      inventory: [],
+      maxPartySize: 6
+    };
+
     // デッキ選択画面の描画
     UI.renderStarterDecks(StarterDecks, (deckId) => this.confirmStarter(deckId));
     this.switchScreen('screen-starter');
   },
-  
-  confirmStarter: function(deckId) {
+
+  confirmStarter: function (deckId) {
     const deck = StarterDecks.find(d => d.id === deckId);
     if (!deck) return;
-    
+
     // パーティ生成
     this.state.player.party = deck.monsters.map(id => this.createMonsterInstance(id));
-    
+
     // ラン情報の初期化
     this.state.currentRun = {
       layer: 1,
@@ -58,20 +71,20 @@ const Game = {
       difficulty: 'normal',
       mapSeed: Date.now()
     };
-    
+
     this.toast(`${deck.name} で冒険を開始します！`, "success");
     this.switchScreen('screen-map');
-    
+
     // マップ生成と描画
     MapSystem.generate(this.state.currentRun.difficulty);
     MapSystem.render();
     UI.updatePartyView(this.state.player);
   },
-  
-  createMonsterInstance: function(id, level = 1) {
+
+  createMonsterInstance: function (id, level = 1) {
     const data = window.dbMonsters.find(m => m.id === id);
     if (!data) return null;
-    
+
     // 初期スキル：技リストの最初の2つを習得済みとする
     const initialSkills = [];
     if (data.moves && data.moves.length > 0) {
@@ -80,11 +93,15 @@ const Game = {
         const moveName = data.moves[i];
         if (window.dbMoves[moveName]) {
           // 技データにID(名前)を付与して格納
-          initialSkills.push({ ...window.dbMoves[moveName], id: moveName });
+          initialSkills.push({
+            ...window.dbMoves[moveName],
+            id: moveName,
+            name: moveName
+          });
         }
       }
     }
-    
+
     return {
       ...JSON.parse(JSON.stringify(data)),
       uid: Date.now() + Math.random().toString(36).substr(2, 9),
@@ -96,8 +113,8 @@ const Game = {
       equipment: [] // 装備スロット初期化
     };
   },
-  
-  showSettings: function() {
+
+  showSettings: function () {
     UI.showModal({
       title: "設定",
       content: "音量設定などの項目がここに表示されます。",
@@ -106,12 +123,12 @@ const Game = {
       ]
     });
   },
-  
-  showCodex: function() {
+
+  showCodex: function () {
     UI.showToast("図鑑機能はまだ実装されていません。", "warning");
   },
-  
-  openSystemMenu: function() {
+
+  openSystemMenu: function () {
     UI.showModal({
       title: "システムメニュー",
       content: "ゲームを中断しますか？",
@@ -127,30 +144,33 @@ const Game = {
       ]
     });
   },
-  
+
   // UIラッパー
-  modal: function(options) {
+  modal: function (options) {
     UI.showModal(options);
   },
-  
-  closeModal: function() {
+
+  closeModal: function () {
     UI.closeModal();
   },
-  
-  toast: function(message, type = '') {
+
+  toast: function (message, type = '') {
     UI.showToast(message, type);
   },
-  
+
   // パーティ更新
-  updatePartyView: function() {
+  updatePartyView: function () {
     UI.updatePartyView(this.state.player);
   }
 };
 
 
 
+// Starter Decks Definition
+
+
 // Window Load Event
-window.onload = function() {
+window.onload = function () {
   Game.init();
 };
 

@@ -5,7 +5,7 @@
 
 const UI = {
     // --- Screen Management ---
-    switchScreen: function(screenId) {
+    switchScreen: function (screenId) {
         // 全画面を隠す
         document.querySelectorAll('.screen').forEach(el => {
             el.classList.add('hidden');
@@ -29,7 +29,7 @@ const UI = {
      * Show a modal dialog
      * @param {Object} options - { title, content, actions: [{label, onClick, class}] }
      */
-    showModal: function(options) {
+    showModal: function (options) {
         const overlay = document.getElementById('modal-overlay');
         const titleEl = document.getElementById('modal-title');
         const contentEl = document.getElementById('modal-content');
@@ -38,7 +38,7 @@ const UI = {
         if (!overlay) return;
 
         titleEl.textContent = options.title || "Message";
-        contentEl.textContent = options.content || "";
+        contentEl.innerHTML = options.content || "";
 
         // アクションボタン生成
         actionsEl.innerHTML = '';
@@ -62,9 +62,54 @@ const UI = {
         overlay.classList.remove('hidden');
     },
 
-    closeModal: function() {
+    closeModal: function () {
         const overlay = document.getElementById('modal-overlay');
         if (overlay) overlay.classList.add('hidden');
+    },
+
+    // --- Tactics UI ---
+    showTacticsModal: function (unit, onSave) {
+        // 現在の設定を取得 (なければデフォルト)
+        const priority = (unit.behavior && unit.behavior.priority) || 'random';
+        const condition = (unit.behavior && unit.behavior.condition) || 'always';
+
+        this.showModal({
+            title: `戦術設定: ${unit.name}`,
+            content: `
+                <div class="tactics-form">
+                    <div class="form-group">
+                        <label>優先ターゲット (Priority)</label>
+                        <select id="tactics-priority">
+                            <option value="random" ${priority === 'random' ? 'selected' : ''}>ランダム (Random)</option>
+                            <option value="lowest_hp" ${priority === 'lowest_hp' ? 'selected' : ''}>HPが低い敵 (Lowest HP)</option>
+                            <option value="highest_at" ${priority === 'highest_at' ? 'selected' : ''}>攻撃力が高い敵 (Highest ATK)</option>
+                            <option value="nearest" ${priority === 'nearest' ? 'selected' : ''}>近い敵 (Nearest)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>スキル使用条件 (Skill Condition)</label>
+                        <select id="tactics-condition" disabled>
+                            <option value="always">常時使用 (Always)</option>
+                            <option value="hp_below_50">HP 50%以下 (Coming Soon)</option>
+                        </select>
+                    </div>
+                </div>
+            `,
+            actions: [
+                {
+                    label: "保存 (Save)",
+                    class: "btn-primary",
+                    onClick: () => {
+                        const newPriority = document.getElementById('tactics-priority').value;
+                        const newCondition = document.getElementById('tactics-condition').value;
+                        onSave({ priority: newPriority, condition: newCondition });
+                        this.closeModal();
+                        Game.toast("戦術を保存しました", "success");
+                    }
+                },
+                { label: "キャンセル", onClick: () => this.closeModal() }
+            ]
+        });
     },
 
     // --- Toast System ---
@@ -73,7 +118,7 @@ const UI = {
      * @param {string} message
      * @param {string} type - 'success', 'error', 'warning', or empty
      */
-    showToast: function(message, type = '') {
+    showToast: function (message, type = '') {
         const container = document.getElementById('toast-container');
         if (!container) return;
 
@@ -92,8 +137,72 @@ const UI = {
         }, 3000);
     },
 
+    // --- Unit Status UI ---
+    showUnitStatusModal: function (unit) {
+        if (!unit) return;
+
+        const nextExp = unit.level * 100;
+        const expPercent = Math.min(100, ((unit.exp || 0) / nextExp) * 100);
+
+        // 装備リスト (仮)
+        const equips = (unit.equipment || []).length > 0 ? unit.equipment.join(", ") : "なし";
+        // スキルリスト
+        const skills = (unit.skills || []).map(s => `[${s.name}]`).join(" ");
+
+        this.showModal({
+            title: `Status: ${unit.name}`,
+            content: `
+                <div style="display:flex; gap:20px;">
+                    <div style="flex-shrink:0;">
+                        <img src="${unit.img}" style="width:100px; height:100px; border:2px solid var(--primary); background:#000;">
+                    </div>
+                    <div style="flex-grow:1; text-align:left; font-size:0.9rem;">
+                        <p><strong>Lv.${unit.level}</strong> (${unit.type})</p>
+                        <div style="margin:5px 0;">
+                            HP: ${unit.currentHp} / ${unit.maxHp}
+                            <div style="width:100%; height:8px; background:#333; margin-top:2px;">
+                                <div style="width:${(unit.currentHp / unit.maxHp) * 100}%; height:100%; background:var(--neon-green);"></div>
+                            </div>
+                        </div>
+                        <div style="margin:5px 0;">
+                            EXP: ${unit.exp || 0} / ${nextExp}
+                            <div style="width:100%; height:4px; background:#333; margin-top:2px;">
+                                <div style="width:${expPercent}%; height:100%; background:var(--neon-cyan);"></div>
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:10px;">
+                            <div>ATK: ${unit.stats.atk}</div>
+                            <div>DEF: ${unit.stats.def}</div>
+                            <div>SPD: ${unit.stats.spd}</div>
+                            <div>RNG: ${unit.stats.range || 1}</div>
+                        </div>
+                    </div>
+                </div>
+                <hr style="border-color:#444; margin:10px 0;">
+                <div style="text-align:left; font-size:0.9rem;">
+                    <p><strong>Skills:</strong> ${skills}</p>
+                    <p><strong>Equip:</strong> ${equips}</p>
+                    <p><strong>Tactics:</strong> ${unit.behavior ? (unit.behavior.priority + " / " + unit.behavior.condition) : "Default"}</p>
+                </div>
+            `,
+            actions: [
+                {
+                    label: "戦術変更",
+                    onClick: () => {
+                        this.showTacticsModal(unit, (newBehavior) => {
+                            unit.behavior = newBehavior;
+                            // モーダルを閉じた後、再度ステータス画面を開く（更新反映）
+                            setTimeout(() => this.showUnitStatusModal(unit), 100);
+                        });
+                    }
+                },
+                { label: "閉じる", onClick: () => this.closeModal() }
+            ]
+        });
+    },
+
     // --- HUD & Party View ---
-    updatePartyView: function(playerState) {
+    updatePartyView: function (playerState) {
         const container = document.getElementById('mini-party-view');
         if (!container || !playerState.party) return;
 
@@ -115,10 +224,10 @@ const UI = {
     },
 
     // --- Starter Selection UI ---
-    renderStarterDecks: function(decks, onSelect) {
+    renderStarterDecks: function (decks, onSelect) {
         const container = document.getElementById('starter-container');
         if (!container) return;
-        
+
         container.innerHTML = '';
 
         decks.forEach(deck => {
@@ -140,12 +249,12 @@ const UI = {
                     <div class="deck-icons">${icons}</div>
                 </div>
             `;
-            
+
             const btn = document.createElement('button');
             btn.className = 'btn-primary';
             btn.textContent = 'SELECT';
             btn.onclick = () => onSelect(deck.id);
-            
+
             card.appendChild(btn);
             container.appendChild(card);
         });

@@ -8,12 +8,12 @@ const Mechanics = {
 
     // タイプ相性表 (仕様書 4.3)
     TYPE_CHART: {
-        fire:   { grass: 1.5, water: 0.5, ice: 2.0 },
-        water:  { fire: 1.5, grass: 0.5, ground: 1.5 },
-        grass:  { water: 1.5, fire: 0.5, flying: 0.5 },
-        light:  { dark: 1.5, ghost: 1.5 },
-        dark:   { light: 1.5, psychic: 1.5 },
-        normal: {} 
+        fire: { grass: 1.5, water: 0.5, ice: 2.0 },
+        water: { fire: 1.5, grass: 0.5, ground: 1.5 },
+        grass: { water: 1.5, fire: 0.5, flying: 0.5 },
+        light: { dark: 1.5, ghost: 1.5 },
+        dark: { light: 1.5, psychic: 1.5 },
+        normal: {}
     },
 
     // 経験値テーブル (仕様書 15.1)
@@ -33,22 +33,44 @@ const Mechanics = {
      * @param {Object} move - 使用する技
      * @returns {Object} { damage, isCritical, typeModifier }
      */
-    calculateDamage: function(attacker, defender, move) {
-        // TODO: 実際のステータスを参照して計算
-        // 仕様書 4.3: damage = skill.power + atk - def
-        
-        let damage = (move.power || 0) + (attacker.stats?.atk || 10) - (defender.stats?.def || 5);
-        
-        // 最低保証
-        damage = Math.max(1, damage);
+    calculateDamage: function (attacker, defender, move) {
+        // ステータス取得 (最低値保証)
+        const atk = attacker.stats?.atk || 10;
+        const def = defender.stats?.def || 5;
+        const power = move.power || 0;
+
+        // 基本ダメージ計算 (防御の影響を大きくしつつ、全体的にデフレさせる)
+        // Formula: (Power + Atk - Def) * 0.4
+        let baseDamage = (power + atk) - def;
+
+        // 防御が高すぎて0以下になるのを防ぐ（最低1ダメージ）
+        // ただし硬い敵には通りにくくする
+        if (baseDamage < 1) baseDamage = 1;
+
+        // 固定倍率 (ワンパン防止)
+        let damage = baseDamage * 0.4;
 
         // タイプ相性計算
         const modifier = this.getTypeMultiplier(move.type, defender.type);
-        damage = Math.floor(damage * modifier);
+        damage *= modifier;
+
+        // クリティカル判定 (10%)
+        let isCritical = false;
+        if (Math.random() < 0.1) {
+            isCritical = true;
+            damage *= 1.5;
+        }
+
+        // ランダム幅 (±10%)
+        const variance = 0.9 + Math.random() * 0.2;
+        damage *= variance;
+
+        // 最終整数化 (最低1)
+        damage = Math.max(1, Math.floor(damage));
 
         return {
             damage: damage,
-            isCritical: false, // TODO: クリティカル判定
+            isCritical: isCritical,
             typeModifier: modifier
         };
     },
@@ -56,7 +78,7 @@ const Mechanics = {
     /**
      * タイプ相性倍率の取得
      */
-    getTypeMultiplier: function(attackType, defenseType) {
+    getTypeMultiplier: function (attackType, defenseType) {
         if (!this.TYPE_CHART[attackType]) return 1.0;
         return this.TYPE_CHART[attackType][defenseType] || 1.0;
     },
@@ -66,7 +88,7 @@ const Mechanics = {
     /**
      * 次のレベルまでに必要な経験値を取得
      */
-    getExpForNextLevel: function(currentLevel) {
+    getExpForNextLevel: function (currentLevel) {
         if (currentLevel >= 20) return 0;
         const nextTotal = this.EXP_TABLE[currentLevel + 1] || 99999;
         const currentTotal = this.EXP_TABLE[currentLevel] || 0;
@@ -77,7 +99,7 @@ const Mechanics = {
      * レベルアップ時のステータス成長
      * @returns {Object} 上昇するステータス値 { hp, atk, def, spd }
      */
-    getGrowthValues: function(monsterId) {
+    getGrowthValues: function (monsterId) {
         // 仕様書 15.2: 種族ごとの成長率 + ランダム補正
         // TODO: dbMonstersから成長率を取得して計算
         return { hp: 10, atk: 2, def: 2, spd: 1 };
