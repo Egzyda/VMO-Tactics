@@ -1,0 +1,1978 @@
+
+```markdown
+# VMO タクティクス - 完全仕様書
+Version 1.0
+
+---
+
+## 1. プロジェクト概要
+
+### 1.1 ゲームコンセプト
+```
+
+- ジャンル: タクティカル・ローグライト・オートバトラー
+- プレイ時間: 1ラン 30-60分
+- マネタイズ: 完全買い切り（またはブラウザ版無料）
+- 参考作品: Slay the Spire, Into the Breach, Darkest Dungeon
+
+モバイル縦画面用ゲームであることを意識したレイアウトにすること。
+ブラウザ標準のダイアログは使用禁止。モーダルまたはトーストのみ使用すること。
+
+```
+### 1.2 既存データの流用
+```
+
+【流用するもの】
+
+- モンスター名（55体分）
+- モンスター画像（/img/monsters/フォルダ内の全画像）
+
+【新規作成するもの】
+
+- バトルシステム（完全新規）
+- ステータス設計（完全新規）
+- 技・スキルシステム（完全新規）
+- マップ・ノードシステム（完全新規）
+- UI/UX（完全新規）
+
+```
+---
+
+## 2. コアゲームループ
+
+### 2.1 1ランの流れ
+```
+
+[開始]
+↓
+スターターデッキ選択（3体）
+↓
+ノードマップ表示（15ノード）
+↓
+ノード選択 → イベント/バトル実行
+↓
+報酬獲得 → パーティ強化
+↓
+（10-15ノード繰り返し）
+↓
+ボス戦
+↓
+[クリア or 全滅]
+↓
+報酬確定 → 図鑑解放 → 次のラン
+
+```
+### 2.2 バトルの流れ
+```
+
+[戦闘開始]
+↓
+配置フェーズ（30秒）
+
+- 3×3グリッドに最大6体配置
+- 各モンスターの行動ルール設定
+  ↓
+  実行フェーズ（オート）
+- ターン制で自動実行
+- 倍速可能（×1, ×2, ×5）
+  ↓
+  （オプション）タイムアウト介入
+- 1戦につき1回のみ
+- 配置変更 or 手動技発動
+  ↓
+  [勝利 or 敗北]
+
+```
+---
+
+## 3. データ設計
+
+### 3.1 モンスターデータ構造
+
+```javascript
+const Monster = {
+  // 既存データから流用
+  id: 1,
+  name: "フレイミー",
+  img: "/img/monsters/001_flamy.webp",
+  
+  // 新規パラメータ
+  stats: {
+    hp: 100,        // 体力
+    atk: 15,        // 攻撃力
+    def: 10,        // 防御力
+    spd: 12,        // 行動速度（ターン内順序）
+    range: 1        // 射程（1=近接, 2=中距離, 3=遠距離）
+  },
+  
+  type: "fire",     // タイプ: fire, water, grass, light, dark, normal
+  rarity: 2,        // レアリティ: 1-5
+  
+  skills: [
+    {
+      id: "flame_strike",
+      name: "炎の一撃",
+      power: 30,
+      range: 1,
+      target: "single",  // single, all, row, column
+      effect: null
+    },
+    {
+      id: "fire_wave",
+      name: "火炎放射",
+      power: 20,
+      range: 2,
+      target: "row",
+      effect: "burn"     // 追加効果: burn, poison, stun等
+    }
+  ],
+  
+  // ゲーム内で変動するステータス
+  currentHp: 100,
+  level: 1,
+  experience: 0,
+  position: { row: 0, col: 0 },  // グリッド上の位置
+  
+  // 行動ルール設定
+  behavior: {
+    priority: "lowest_hp",  // 狙う優先度: lowest_hp, highest_atk, nearest等
+    skill_condition: "hp_below_50",  // スキル発動条件
+    preferred_skill: 0  // 優先スキル番号
+  }
+};
+```
+
+### 3.2 敵データ構造
+
+```javascript
+const Enemy = {
+  id: "goblin_01",
+  name: "ゴブリン",
+  img: "/img/enemies/goblin.png",  // 新規作成
+  stats: {
+    hp: 80,
+    atk: 12,
+    def: 8,
+    spd: 10,
+    range: 1
+  },
+  type: "normal",
+  skills: [
+    {
+      id: "club_swing",
+      name: "棍棒振り",
+      power: 25,
+      range: 1,
+      target: "single"
+    }
+  ],
+  ai_pattern: "aggressive",  // aggressive, defensive, balanced
+  drop_rewards: {
+    gold: 20,
+    exp: 15,
+    items: ["potion_hp"]
+  }
+};
+```
+
+### 3.3 ノードデータ構造
+
+```javascript
+const Node = {
+  id: "node_01",
+  type: "battle",  // battle, rest, shop, event, elite, boss
+  position: { x: 2, y: 1 },  // マップ上の座標
+  connections: ["node_02", "node_03"],  // 接続先ノードID
+  status: "available",  // locked, available, cleared
+  
+  // typeごとの詳細データ
+  data: {
+    // type="battle"の場合
+    enemies: ["goblin_01", "goblin_02"],
+    rewards: {
+      gold: 50,
+      exp: 30,
+      drop_chance: 0.3
+    }
+  }
+};
+```
+
+### 3.4 マップデータ構造
+
+```javascript
+const Map = {
+  id: "map_forest",
+  name: "霧の森",
+  difficulty: "normal",  // normal, hard, nightmare
+  
+  layout: [
+    // 各層のノード配置（左から右へ進む）
+    { layer: 0, nodes: ["start"] },
+    { layer: 1, nodes: ["battle_01", "battle_02", "event_01"] },
+    { layer: 2, nodes: ["rest_01", "shop_01", "battle_03"] },
+    { layer: 3, nodes: ["elite_01"] },
+    { layer: 4, nodes: ["battle_04", "event_02", "battle_05"] },
+    { layer: 5, nodes: ["boss_01"] }
+  ],
+  
+  boss: {
+    id: "boss_forest_king",
+    name: "森の王",
+    img: "/img/bosses/forest_king.png"
+  }
+};
+```
+
+-----
+
+## 4. バトルシステム詳細
+
+### 4.1 グリッド配置
+
+```
+3×3グリッド（プレイヤー側）
+
+[0,0] [0,1] [0,2]  ← 前列（最初に狙われる）
+[1,0] [1,1] [1,2]  ← 中列
+[2,0] [2,1] [2,2]  ← 後列（守られる）
+
+敵も同様に3×3グリッド配置
+
+射程の概念:
+- 射程1: 同じ列の最前列のみ攻撃可能
+- 射程2: 同じ列の前列・中列攻撃可能
+- 射程3: 全ての敵を攻撃可能
+```
+
+### 4.2 ターン処理
+
+```javascript
+// 1ターンの処理フロー
+function executeTurn() {
+  // 1. 行動順序決定（SPD順）
+  const actionOrder = [...playerMonsters, ...enemies]
+    .sort((a, b) => b.stats.spd - a.stats.spd);
+  
+  // 2. 順番に行動
+  actionOrder.forEach(unit => {
+    if (unit.currentHp <= 0) return; // 戦闘不能チェック
+    
+    // 行動決定
+    const action = decideAction(unit);
+    
+    // 実行
+    executeAction(unit, action);
+    
+    // 勝敗判定
+    if (checkBattleEnd()) return;
+  });
+  
+  // 3. ターン終了処理
+  applyEndOfTurnEffects();
+  turnCount++;
+}
+
+// 行動決定ロジック
+function decideAction(unit) {
+  // プレイヤーユニット: 設定されたbehaviorに従う
+  if (unit.isPlayer) {
+    const targets = findTargets(unit.behavior.priority);
+    const skill = selectSkill(unit, targets);
+    return { skill, targets };
+  }
+  
+  // 敵: AI パターンに従う
+  return enemyAI(unit);
+}
+```
+
+### 4.3 ダメージ計算
+
+```javascript
+function calculateDamage(attacker, defender, skill) {
+  // 基本ダメージ
+  let damage = skill.power + attacker.stats.atk - defender.stats.def;
+  
+  // タイプ相性（簡易版）
+  const typeBonus = getTypeMultiplier(attacker.type, defender.type);
+  damage *= typeBonus;
+  
+  // クリティカル（10%）
+  if (Math.random() < 0.1) {
+    damage *= 1.5;
+    showCritical();
+  }
+  
+  // 最低ダメージ保証
+  damage = Math.max(1, Math.floor(damage));
+  
+  return damage;
+}
+
+// タイプ相性
+function getTypeMultiplier(attackType, defenseType) {
+  const chart = {
+    fire: { grass: 1.5, water: 0.5 },
+    water: { fire: 1.5, grass: 0.5 },
+    grass: { water: 1.5, fire: 0.5 },
+    light: { dark: 1.5 },
+    dark: { light: 1.5 }
+  };
+  
+  return chart[attackType]?.[defenseType] || 1.0;
+}
+```
+
+### 4.4 タイムアウト機能
+
+```javascript
+// バトル中に1回だけ使用可能
+let timeoutUsed = false;
+
+function activateTimeout() {
+  if (timeoutUsed) return;
+  
+  // バトル一時停止
+  pauseBattle();
+  
+  // プレイヤーに選択肢を提示
+  showTimeoutMenu({
+    options: [
+      "配置を変更する",
+      "モンスターに手動指示",
+      "何もせず再開"
+    ]
+  });
+  
+  timeoutUsed = true;
+}
+```
+
+-----
+
+## 5. マップ・ノードシステム
+
+### 5.1 ノードタイプ詳細
+
+#### 5.1.1 戦闘ノード
+
+```javascript
+const BattleNode = {
+  execute: () => {
+    // 敵編成をランダム生成
+    const enemies = generateEnemies(difficulty);
+    
+    // バトル開始
+    const result = startBattle(playerParty, enemies);
+    
+    // 報酬
+    if (result === "victory") {
+      giveRewards({
+        gold: 30 + random(20),
+        exp: 20 + random(10),
+        item: rollItemDrop()
+      });
+    }
+  }
+};
+```
+
+#### 5.1.2 休息ノード
+
+```javascript
+const RestNode = {
+  execute: () => {
+    showRestMenu({
+      options: [
+        {
+          label: "全員のHPを50%回復",
+          effect: () => healParty(0.5)
+        },
+        {
+          label: "1体を完全回復＋レベルアップ",
+          effect: () => {
+            const selected = selectMonster();
+            healMonster(selected, 1.0);
+            levelUp(selected);
+          }
+        }
+      ]
+    });
+  }
+};
+```
+
+#### 5.1.3 商人ノード
+
+```javascript
+const ShopNode = {
+  execute: () => {
+    const shopInventory = [
+      { type: "monster", item: randomMonster(), price: 100 },
+      { type: "item", item: "potion_hp", price: 30 },
+      { type: "skill", item: randomSkill(), price: 80 },
+      { type: "equipment", item: randomEquipment(), price: 120 }
+    ];
+    
+    showShopUI(shopInventory);
+  }
+};
+```
+
+#### 5.1.4 イベントノード
+
+```javascript
+const EventNode = {
+  execute: () => {
+    const event = selectRandomEvent();
+    
+    // 例: 「怪しい宝箱」イベント
+    showEventDialog({
+      text: "道の途中に怪しい宝箱がある。開けますか？",
+      choices: [
+        {
+          label: "開ける",
+          success_rate: 0.7,
+          success: () => giveItem("rare_equipment"),
+          failure: () => damageRandomMonster(20)
+        },
+        {
+          label: "無視する",
+          effect: () => giveGold(10)
+        }
+      ]
+    });
+  }
+};
+```
+
+#### 5.1.5 エリートノード
+
+```javascript
+const EliteNode = {
+  execute: () => {
+    // 通常より強い敵
+    const eliteEnemy = generateEliteEnemy();
+    
+    const result = startBattle(playerParty, [eliteEnemy]);
+    
+    if (result === "victory") {
+      giveRewards({
+        gold: 100,
+        exp: 80,
+        guaranteed_item: "rare_skill"
+      });
+    }
+  }
+};
+```
+
+#### 5.1.6 ボスノード
+
+```javascript
+const BossNode = {
+  execute: () => {
+    const boss = loadBoss(currentMap.boss.id);
+    
+    const result = startBattle(playerParty, [boss]);
+    
+    if (result === "victory") {
+      completeRun();
+      unlockRewards();
+    } else {
+      gameOver();
+    }
+  }
+};
+```
+
+### 5.2 マップ生成ロジック
+
+```javascript
+function generateMap(difficulty) {
+  const map = {
+    layers: []
+  };
+  
+  // Layer 0: スタート
+  map.layers.push({
+    nodes: [{ type: "start" }]
+  });
+  
+  // Layer 1-2: 序盤（戦闘中心）
+  for (let i = 1; i <= 2; i++) {
+    map.layers.push({
+      nodes: generateNodes(3, ["battle", "battle", "event"], difficulty)
+    });
+  }
+  
+  // Layer 3: 中盤（休息・商人出現）
+  map.layers.push({
+    nodes: generateNodes(3, ["rest", "shop", "battle"], difficulty)
+  });
+  
+  // Layer 4: 後半（エリート出現）
+  map.layers.push({
+    nodes: generateNodes(3, ["battle", "elite", "event"], difficulty)
+  });
+  
+  // Layer 5: ボス前（最終準備）
+  map.layers.push({
+    nodes: generateNodes(2, ["shop", "rest"], difficulty)
+  });
+  
+  // Layer 6: ボス
+  map.layers.push({
+    nodes: [{ type: "boss" }]
+  });
+  
+  // ノード間の接続を生成
+  connectNodes(map);
+  
+  return map;
+}
+```
+
+-----
+
+## 6. モンスター収集・図鑑システム
+
+### 6.1 図鑑データ構造
+
+```javascript
+const Codex = {
+  monsters: [
+    {
+      id: 1,
+      name: "フレイミー",
+      unlocked: false,  // 初期状態はロック
+      unlock_condition: "complete_first_run",
+      stats_bonus: {
+        // 図鑑登録で得られる恩恵
+        starting_level: 1,
+        skill_slots: 2
+      }
+    },
+    // ... 全55体分
+  ],
+  
+  unlockMonster: (id) => {
+    const monster = Codex.monsters.find(m => m.id === id);
+    monster.unlocked = true;
+    applyBonuses(monster);
+    saveProgress();
+  }
+};
+```
+
+### 6.2 解放条件の例
+
+```javascript
+const UnlockConditions = {
+  // 基本的な解放
+  "complete_first_run": "最初のランをクリア",
+  "defeat_boss_normal": "ノーマルボスを倒す",
+  
+  // 条件付き解放
+  "win_with_fire_team": "炎タイプのみでクリア",
+  "no_damage_battle": "ノーダメージで戦闘勝利",
+  "reach_layer_5": "レイヤー5に到達",
+  
+  // 隠し解放
+  "secret_event_forest": "森の秘密イベントを発見",
+  "collect_all_fire": "全ての炎タイプを解放"
+};
+```
+
+-----
+
+## 7. 永続進行システム
+
+### 7.1 セーブデータ構造
+
+```javascript
+const SaveData = {
+  // プレイヤー進捗
+  progress: {
+    runs_completed: 0,
+    total_victories: 0,
+    highest_layer_reached: 0,
+    unlocked_difficulties: ["normal"]
+  },
+  
+  // 図鑑
+  codex: {
+    unlocked_monsters: [1, 3, 5],  // 初期3体
+    total_unlocked: 3
+  },
+  
+  // 実績
+  achievements: [
+    {
+      id: "first_victory",
+      name: "初勝利",
+      unlocked: false,
+      reward: "new_starter_deck"
+    }
+  ],
+  
+  // アンロック済みコンテンツ
+  unlocks: {
+    starter_decks: ["basic_balanced"],
+    difficulties: ["normal"],
+    challenge_modes: []
+  },
+  
+  // 統計
+  stats: {
+    total_battles: 0,
+    monsters_defeated: 0,
+    favorite_monster: null
+  }
+};
+```
+
+### 7.2 スターターデッキ
+
+```javascript
+const StarterDecks = {
+  basic_balanced: {
+    name: "バランス編成",
+    monsters: [1, 3, 5],  // フレイミー, ウォータル, ハッパンク
+    unlocked_by_default: true
+  },
+  
+  fire_rush: {
+    name: "炎速攻",
+    monsters: [1, 2, 11],
+    unlock_condition: "unlock_5_fire_types"
+  },
+  
+  tank_wall: {
+    name: "鉄壁防衛",
+    monsters: [3, 5, 20],
+    unlock_condition: "win_without_losing_monster"
+  }
+  
+  // ... 合計10種類程度
+};
+```
+
+-----
+
+## 8. UI/UX設計
+
+### 8.1 画面一覧
+
+#### タイトル画面
+
+```
+┌─────────────────────────────┐
+│                             │
+│      VMO TACTICS            │
+│                             │
+│   [新しい遠征を始める]        │
+│   [図鑑を見る]              │
+│   [実績]                    │
+│   [設定]                    │
+│                             │
+└─────────────────────────────┘
+```
+
+#### スターターデッキ選択画面
+
+```
+┌─────────────────────────────┐
+│  スターターを選択            │
+├─────────────────────────────┤
+│ [バランス編成]              │
+│  フレイミー / ウォータル /   │
+│  ハッパンク                 │
+│                             │
+│ [炎速攻] 🔒                │
+│ （炎タイプ5体解放で開放）    │
+└─────────────────────────────┘
+```
+
+#### マップ画面
+
+```
+┌─────────────────────────────┐
+│ Layer 1  Layer 2  Layer 3   │
+│                             │
+│   🗡️      💤      🛒       │
+│  ／ ＼    │      ／         │
+│ 🗡️  ⚠️    🗡️    👑         │
+│                             │
+│ 現在地: Layer 1 / 戦闘      │
+│ パーティHP: ████░░░░        │
+└─────────────────────────────┘
+```
+
+#### 配置フェーズ画面
+
+```
+┌─────────────────────────────┐
+│      敵陣営                  │
+│  [ ][ ][敵]                 │
+│  [敵][ ][敵]                 │
+│  [ ][敵][ ]                 │
+│ ────────────────────         │
+│      味方陣営                │
+│  [A][B][ ]                  │
+│  [ ][C][ ]                  │
+│  [ ][ ][ ]                  │
+│                             │
+│ モンスター: [A][B][C][D][E]  │
+│                             │
+│ [配置完了] [戦術設定]        │
+└─────────────────────────────┘
+```
+
+#### バトル実行画面
+
+```
+┌─────────────────────────────┐
+│ Turn 3    [×1][×2][×5]      │
+│                             │
+│  敵側グリッド表示            │
+│  ─────────                  │
+│  味方側グリッド表示          │
+│                             │
+│ ログ:                       │
+│ > フレイミー の 炎の一撃！   │
+│ > ゴブリンに 28ダメージ！    │
+│                             │
+│ [⏸ タイムアウト] (残り1回)   │
+└─────────────────────────────┘
+```
+
+#### 報酬画面
+
+```
+┌─────────────────────────────┐
+│      戦闘勝利！              │
+│                             │
+│  獲得報酬:                  │
+│  💰 ゴールド +50            │
+│  ⭐ 経験値 +30              │
+│  🎁 アイテム: HP回復薬      │
+│                             │
+│  追加報酬を選択:             │
+│  [ 新モンスター加入 ]        │
+│  [ 既存モンスター強化 ]      │
+│  [ スキル習得 ]             │
+│                             │
+│ [次へ進む]                  │
+└─────────────────────────────┘
+```
+
+### 8.2 重要なUI要素
+
+#### モンスターカード表示
+
+```
+┌──────────┐
+│  [画像]   │
+├──────────┤
+│ フレイミー │
+│ Lv.5      │
+│ HP: 120   │
+│ ATK: 18   │
+│ 🔥 火属性  │
+└──────────┘
+```
+
+#### グリッド配置UI
+
+```
+- ドラッグ&ドロップで配置
+- 射程が届く範囲をハイライト表示
+- 配置不可能な場所は赤く表示
+```
+
+#### 戦術設定UI
+
+```
+モンスター: フレイミー
+┌────────────────┐
+│ 狙う優先度:     │
+│ ○ HP最小の敵   │
+│ ○ 最も近い敵   │
+│ ○ 攻撃力最大   │
+│                │
+│ スキル発動条件: │
+│ ○ 常時         │
+│ ○ HP50%以下    │
+│ ○ 敵が複数     │
+└────────────────┘
+```
+
+-----
+
+## 9. 技・スキルシステム
+
+### 9.1 スキルカテゴリ
+
+#### 攻撃スキル
+
+```javascript
+const AttackSkills = [
+  {
+    id: "flame_strike",
+    name: "炎の一撃",
+    type: "fire",
+    power: 30,
+    range: 1,
+    target: "single",
+    description: "近接攻撃。高火力単体攻撃"
+  },
+  {
+    id: "flame_wave",
+    name: "火炎放射",
+    type: "fire",
+    power: 20,
+    range: 2,
+    target: "row",
+    description: "中距離攻撃。同じ列全体にダメージ"
+  }
+];
+```
+
+#### サポートスキル
+
+```javascript
+const SupportSkills = [
+  {
+    id: "heal",
+    name: "ヒール",
+    power: 0,
+    range: 3,
+    target: "ally_single",
+    effect: "heal",
+    heal_amount: 40,
+    description: "味方1体のHPを40回復"
+  },
+  {
+    id: "defense_up",
+    name: "防御強化",
+    power: 0,
+    range: 3,
+    target: "ally_all",
+    effect: "buff_def",
+    buff_amount: 5,
+    duration: 3,
+    description: "味方全体の防御力を3ターン上昇"
+  }
+];
+```
+
+#### 特殊スキル
+
+```javascript
+const SpecialSkills = [
+  {
+    id: "counterattack",
+    name: "カウンター",
+    power: 0,
+    range: 0,
+    target: "self",
+    effect: "counter",
+    duration: 1,
+    description: "次に受けた攻撃を1.5倍で反射"
+  },
+  {
+    id: "sacrifice",
+    name: "捨て身",
+    power: 80,
+    range: 1,
+    target: "single",
+    effect: "recoil",
+    recoil_percent: 0.3,
+    description: "超火力攻撃。自分もダメージを受ける"
+  }
+];
+```
+
+### 9.2 スキル習得システム
+
+```javascript
+function learnSkill(monster, skillId) {
+  // モンスターごとに習得可能スキル上限
+  // 初期2個、図鑑ボーナスで最大4個
+  const maxSkills = 2 + (Codex.getBonus(monster.id).skill_slots || 0);
+  
+  if (monster.skills.length >= maxSkills) {
+    // 既存スキルと入れ替え
+    showSkillReplaceDialog(monster, skillId);
+  } else {
+    // 新規追加
+    monster.skills.push(getSkillData(skillId));
+  }
+}
+```
+
+-----
+
+## 10. 難易度システム
+
+### 10.1 難易度設定
+
+#### ノーマル
+
+```javascript
+const NormalDifficulty = {
+  enemy_stats_multiplier: 1.0,
+  player_starting_gold: 100,
+  shop_prices_multiplier: 1.0,
+  boss_hp_multiplier: 1.0,
+  special_mechanics: []
+};
+```
+
+#### ハード
+
+```javascript
+const HardDifficulty = {
+  enemy_stats_multiplier: 1.5,
+  player_starting_gold: 50,
+  shop_prices_multiplier: 1.3,
+  boss_hp_multiplier: 1.8,
+  special_mechanics: [
+    "elite_enemies_appear_more",
+    "fewer_rest_nodes"
+  ]
+};
+```
+
+#### ナイトメア
+
+```javascript
+const NightmareDifficulty = {
+  enemy_stats_multiplier: 2.0,
+  player_starting_gold: 30,
+  shop_prices_multiplier: 1.5,
+  boss_hp_multiplier: 2.5,
+  special_mechanics: [
+    "enemies_use_advanced_ai",
+    "permadeath_on_monster_loss",
+    "hidden_boss_phase_2"
+  ]
+};
+```
+
+-----
+
+## 11. 実績・チャレンジシステム
+
+### 11.1 実績リスト
+
+```javascript
+const Achievements = [
+  {
+    id: "first_victory",
+    name: "初勝利",
+    description: "初めてランをクリアする",
+    reward: "new_starter_deck",
+    hidden: false
+  },
+  {
+    id: "no_damage_run",
+    name: "無傷の勝利",
+    description: "1回もダメージを受けずにクリア",
+    reward: "rare_monster_unlock",
+    hidden: false
+  },
+  {
+    id: "solo_clear",
+    name: "孤高の戦士",
+    description: "モンスター1体のみでクリア",
+    reward: "special_title",
+    hidden: true
+  },
+  {
+    id: "codex_complete",
+    name: "図鑑マスター",
+    description: "全55体を解放する",
+    reward: "true_final_boss_unlock",
+    hidden: false
+  }
+];
+```
+
+```javascript
+### 11.2 チャレンジモード
+```javascript
+const ChallengeRuns = [
+  {
+    id: "fire_only",
+    name: "炎縛り",
+    rules: {
+      allowed_types: ["fire"],
+      banned_types: ["water", "grass", "light", "dark"]
+    },
+    reward: "fire_master_title"
+  },
+  {
+    id: "low_rarity",
+    name: "低レア縛り",
+    rules: {
+      max_rarity: 3,
+      min_party_size: 3
+    },
+    reward: "underdog_title"
+  },
+  {
+    id: "no_shop",
+    name: "無買い物クリア",
+    rules: {
+      shop_disabled: true,
+      starting_gold: 0
+    },
+    reward: "ascetic_monster_unlock"
+  },
+  {
+    id: "speed_run",
+    name: "スピードラン",
+    rules: {
+      max_turns_per_battle: 10,
+      time_limit: 1800  // 30分
+    },
+    reward: "speed_demon_title"
+  },
+  {
+    id: "pacifist",
+    name: "平和主義者",
+    rules: {
+      no_direct_damage: true,
+      only_support_skills: true
+    },
+    reward: "pacifist_monster_unlock"
+  },
+  {
+    id: "solo_challenge",
+    name: "孤独の戦士",
+    rules: {
+      max_party_size: 1,
+      no_new_monsters: true
+    },
+    reward: "lone_wolf_title"
+  }
+];
+```
+
+-----
+
+## 12. 敵AI設計
+
+### 12.1 AI行動パターン
+
+```javascript
+const EnemyAI = {
+  // 攻撃的AI
+  aggressive: (enemy, playerParty) => {
+    // 最もHPが低い敵を狙う
+    const target = playerParty
+      .filter(m => m.currentHp > 0)
+      .sort((a, b) => a.currentHp - b.currentHp)[0];
+    
+    // 最も火力の高いスキルを使用
+    const skill = enemy.skills
+      .sort((a, b) => b.power - a.power)[0];
+    
+    return { target, skill };
+  },
+  
+  // 防御的AI
+  defensive: (enemy, playerParty) => {
+    // 自分のHPが50%以下なら回復
+    if (enemy.currentHp < enemy.stats.hp * 0.5) {
+      const healSkill = enemy.skills.find(s => s.effect === "heal");
+      if (healSkill) return { target: enemy, skill: healSkill };
+    }
+    
+    // それ以外は最も攻撃力が高い敵を狙う
+    const target = playerParty
+      .filter(m => m.currentHp > 0)
+      .sort((a, b) => b.stats.atk - a.stats.atk)[0];
+    
+    return { target, skill: enemy.skills[0] };
+  },
+  
+  // バランス型AI
+  balanced: (enemy, playerParty) => {
+    // 状況判断
+    const myHpPercent = enemy.currentHp / enemy.stats.hp;
+    const enemyCount = playerParty.filter(m => m.currentHp > 0).length;
+    
+    // 複数の敵がいて範囲攻撃持ちなら範囲攻撃
+    if (enemyCount >= 2) {
+      const aoeSkill = enemy.skills.find(s => 
+        s.target === "all" || s.target === "row"
+      );
+      if (aoeSkill) return { target: "all", skill: aoeSkill };
+    }
+    
+    // HPが低ければ防御行動
+    if (myHpPercent < 0.3) {
+      const defenseSkill = enemy.skills.find(s => 
+        s.effect === "buff_def" || s.effect === "heal"
+      );
+      if (defenseSkill) return { target: enemy, skill: defenseSkill };
+    }
+    
+    // 通常は最も厄介な敵を狙う
+    const target = playerParty
+      .filter(m => m.currentHp > 0)
+      .sort((a, b) => {
+        const threatA = a.stats.atk * (a.currentHp / a.stats.hp);
+        const threatB = b.stats.atk * (b.currentHp / b.stats.hp);
+        return threatB - threatA;
+      })[0];
+    
+    return { target, skill: enemy.skills[0] };
+  }
+};
+```
+
+### 12.2 ボスAI（特殊行動）
+
+```javascript
+const BossAI = {
+  // ボス専用の複雑なAI
+  execute: (boss, playerParty, turnCount) => {
+    // フェーズ制御
+    const hpPercent = boss.currentHp / boss.stats.hp;
+    
+    // フェーズ2: HP50%以下
+    if (hpPercent <= 0.5 && !boss.phase2Triggered) {
+      boss.phase2Triggered = true;
+      return {
+        action: "special_phase_change",
+        effect: () => {
+          boss.stats.atk *= 1.5;
+          addLog("ボスが本気を出した！攻撃力が上昇！");
+          boss.skills.push(bossUltimateSkill);
+        }
+      };
+    }
+    
+    // フェーズ3: HP20%以下
+    if (hpPercent <= 0.2 && !boss.phase3Triggered) {
+      boss.phase3Triggered = true;
+      return {
+        action: "summon_minions",
+        effect: () => {
+          const minions = generateMinions(2);
+          addEnemies(minions);
+          addLog("ボスが手下を呼び出した！");
+        }
+      };
+    }
+    
+    // 特殊行動: 3ターンごとに全体攻撃
+    if (turnCount % 3 === 0) {
+      const ultimateSkill = boss.skills.find(s => s.id === "boss_ultimate");
+      return { target: "all", skill: ultimateSkill };
+    }
+    
+    // 通常行動
+    return EnemyAI.aggressive(boss, playerParty);
+  }
+};
+```
+
+-----
+
+## 13. アイテム・装備システム
+
+### 13.1 アイテムデータ構造
+
+```javascript
+const Items = {
+  // 消費アイテム
+  consumables: [
+    {
+      id: "potion_hp",
+      name: "HP回復薬",
+      type: "consumable",
+      effect: "heal",
+      amount: 50,
+      description: "1体のHPを50回復",
+      price: 30
+    },
+    {
+      id: "revive",
+      name: "復活の羽",
+      type: "consumable",
+      effect: "revive",
+      amount: 0.5,
+      description: "倒れたモンスターをHP50%で復活",
+      price: 100
+    },
+    {
+      id: "exp_boost",
+      name: "経験の書",
+      type: "consumable",
+      effect: "exp",
+      amount: 200,
+      description: "1体に経験値200付与",
+      price: 80
+    }
+  ],
+  
+  // 装備品
+  equipment: [
+    {
+      id: "fire_ring",
+      name: "炎のリング",
+      type: "equipment",
+      slot: "accessory",
+      stats_bonus: {
+        atk: 5
+      },
+      special_effect: {
+        type: "damage_boost",
+        element: "fire",
+        multiplier: 1.2
+      },
+      description: "炎属性の攻撃力+20%",
+      price: 120
+    },
+    {
+      id: "steel_armor",
+      name: "鋼の鎧",
+      type: "equipment",
+      slot: "armor",
+      stats_bonus: {
+        def: 8,
+        hp: 20
+      },
+      description: "防御力+8、HP+20",
+      price: 150
+    },
+    {
+      id: "speed_boots",
+      name: "俊足のブーツ",
+      type: "equipment",
+      slot: "boots",
+      stats_bonus: {
+        spd: 3
+      },
+      special_effect: {
+        type: "first_strike",
+        chance: 0.3
+      },
+      description: "素早さ+3。30%で先制攻撃",
+      price: 100
+    },
+    {
+      id: "vampire_fang",
+      name: "吸血の牙",
+      type: "equipment",
+      slot: "accessory",
+      stats_bonus: {
+        atk: 3
+      },
+      special_effect: {
+        type: "lifesteal",
+        percent: 0.2
+      },
+      description: "与ダメージの20%を回復",
+      price: 150
+    }
+  ]
+};
+```
+
+### 13.2 装備システム
+
+```javascript
+function equipItem(monster, item) {
+  // 装備スロット確認
+  const slot = item.slot;
+  
+  // 既存装備があれば外す
+  if (monster.equipment[slot]) {
+    removeEquipmentBonus(monster, monster.equipment[slot]);
+  }
+  
+  // 新しい装備をセット
+  monster.equipment[slot] = item;
+  
+  // ステータスボーナス適用
+  if (item.stats_bonus) {
+    Object.keys(item.stats_bonus).forEach(stat => {
+      monster.stats[stat] += item.stats_bonus[stat];
+    });
+  }
+  
+  // 特殊効果登録
+  if (item.special_effect) {
+    monster.special_effects.push(item.special_effect);
+  }
+  
+  // HP上限が増えた場合、現在HPも増やす
+  if (item.stats_bonus.hp) {
+    monster.currentHp += item.stats_bonus.hp;
+  }
+}
+
+function removeEquipmentBonus(monster, item) {
+  // ステータスボーナス削除
+  if (item.stats_bonus) {
+    Object.keys(item.stats_bonus).forEach(stat => {
+      monster.stats[stat] -= item.stats_bonus[stat];
+    });
+  }
+  
+  // HP上限が減る場合、現在HPも調整
+  if (item.stats_bonus.hp) {
+    monster.currentHp = Math.min(
+      monster.currentHp,
+      monster.stats.hp - item.stats_bonus.hp
+    );
+  }
+  
+  // 特殊効果削除
+  if (item.special_effect) {
+    monster.special_effects = monster.special_effects.filter(
+      e => e !== item.special_effect
+    );
+  }
+}
+```
+
+-----
+
+## 14. イベントシステム
+
+### 14.1 イベントデータ構造
+
+```javascript
+const Events = [
+  {
+    id: "mysterious_chest",
+    name: "怪しい宝箱",
+    description: "道の途中に怪しい宝箱がある。",
+    choices: [
+      {
+        text: "開ける",
+        outcomes: [
+          {
+            probability: 0.6,
+            result: "success",
+            effect: () => {
+              addLog("レアアイテムを手に入れた！");
+              giveItem("rare_equipment");
+            }
+          },
+          {
+            probability: 0.3,
+            result: "trap",
+            effect: () => {
+              addLog("罠だった！モンスターがダメージを受けた！");
+              damageRandomMonster(30);
+            }
+          },
+          {
+            probability: 0.1,
+            result: "jackpot",
+            effect: () => {
+              addLog("大当たり！貴重なモンスターが仲間に！");
+              addMonsterToParty(getRandomRareMonster());
+            }
+          }
+        ]
+      },
+      {
+        text: "無視する",
+        outcomes: [
+          {
+            probability: 1.0,
+            result: "safe",
+            effect: () => {
+              addLog("安全に通り過ぎた。");
+              giveGold(10);
+            }
+          }
+        ]
+      }
+    ]
+  },
+  
+  {
+    id: "wounded_traveler",
+    name: "傷ついた旅人",
+    description: "傷ついた旅人が倒れている。",
+    choices: [
+      {
+        text: "助ける（HP回復薬を使用）",
+        cost: { item: "potion_hp", amount: 1 },
+        outcomes: [
+          {
+            probability: 1.0,
+            result: "grateful",
+            effect: () => {
+              addLog("旅人はお礼に貴重な情報をくれた。");
+              revealMapNodes(3);
+              giveGold(50);
+            }
+          }
+        ]
+      },
+      {
+        text: "助ける（ゴールドを渡す）",
+        cost: { gold: 50 },
+        outcomes: [
+          {
+            probability: 0.8,
+            result: "grateful",
+            effect: () => {
+              addLog("旅人は回復し、モンスターを譲ってくれた。");
+              addMonsterToParty(getRandomMonster());
+            }
+          },
+          {
+            probability: 0.2,
+            result: "scam",
+            effect: () => {
+              addLog("旅人は偽物だった！ゴールドだけ奪われた！");
+            }
+          }
+        ]
+      },
+      {
+        text: "無視する",
+        outcomes: [
+          {
+            probability: 1.0,
+            result: "pass",
+            effect: () => {
+              addLog("何事もなく通り過ぎた。");
+            }
+          }
+        ]
+      }
+    ]
+  },
+  
+  {
+    id: "shrine",
+    name: "神秘の祠",
+    description: "古い祠がある。何かを捧げると祝福を得られるかもしれない。",
+    choices: [
+      {
+        text: "ゴールドを捧げる（100G）",
+        cost: { gold: 100 },
+        outcomes: [
+          {
+            probability: 1.0,
+            result: "blessing",
+            effect: () => {
+              addLog("祠が光り、祝福を受けた！");
+              const random = Math.random();
+              if (random < 0.4) {
+                addLog("全モンスターのHPが完全回復！");
+                healParty(1.0);
+              } else if (random < 0.7) {
+                addLog("ランダムなモンスターがレベルアップ！");
+                levelUpRandomMonster();
+              } else {
+                addLog("貴重なスキルを習得した！");
+                learnRandomSkill();
+              }
+            }
+          }
+        ]
+      },
+      {
+        text: "モンスターを1体捧げる",
+        cost: { monster: 1 },
+        outcomes: [
+          {
+            probability: 1.0,
+            result: "great_blessing",
+            effect: () => {
+              addLog("強力な祝福を受けた！");
+              const sacrificedMonster = selectMonsterToSacrifice();
+              removeMonster(sacrificedMonster);
+              
+              giveGold(200);
+              const newMonster = getRandomRareMonster();
+              newMonster.level = sacrificedMonster.level + 2;
+              addMonsterToParty(newMonster);
+            }
+          }
+        ]
+      },
+      {
+        text: "何もせず立ち去る",
+        outcomes: [
+          {
+            probability: 1.0,
+            result: "pass",
+            effect: () => {
+              addLog("静かに立ち去った。");
+            }
+          }
+        ]
+      }
+    ]
+  },
+  
+  {
+    id: "fountain",
+    name: "魔法の泉",
+    description: "光り輝く泉を発見した。飲むと力を得られそうだ。",
+    choices: [
+      {
+        text: "泉の水を飲む",
+        outcomes: [
+          {
+            probability: 0.7,
+            result: "power_up",
+            effect: () => {
+              addLog("力がみなぎってきた！");
+              const monster = selectRandomMonster();
+              monster.stats.atk += 5;
+              monster.stats.def += 3;
+              addLog(`${monster.name}のステータスが永続的に上昇！`);
+            }
+          },
+          {
+            probability: 0.2,
+            result: "heal",
+            effect: () => {
+              addLog("傷が癒えていく...");
+              healParty(1.0);
+            }
+          },
+          {
+            probability: 0.1,
+            result: "curse",
+            effect: () => {
+              addLog("呪われた水だった！");
+              const monster = selectRandomMonster();
+              monster.stats.hp -= 10;
+              addLog(`${monster.name}の最大HPが減少した...`);
+            }
+          }
+        ]
+      },
+      {
+        text: "水を汲んで持ち帰る",
+        outcomes: [
+          {
+            probability: 1.0,
+            result: "bottle",
+            effect: () => {
+              addLog("魔法の水を手に入れた。");
+              giveItem("magic_water");
+            }
+          }
+        ]
+      }
+    ]
+  }
+];
+```
+
+### 14.2 イベント実行システム
+
+```javascript
+function executeEvent(eventId) {
+  const event = Events.find(e => e.id === eventId);
+  
+  showEventDialog({
+    title: event.name,
+    description: event.description,
+    image: event.image || "default_event.png",
+    choices: event.choices.map(choice => ({
+      text: choice.text,
+      cost: choice.cost,
+      enabled: canAffordCost(choice.cost),
+      onClick: () => resolveChoice(choice)
+    }))
+  });
+}
+
+function resolveChoice(choice) {
+  // コスト支払い
+  if (choice.cost) {
+    if (!payCost(choice.cost)) {
+      addLog("コストが足りない！");
+      return;
+    }
+  }
+  
+  // 結果判定（確率に基づく）
+  const roll = Math.random();
+  let cumulative = 0;
+  
+  for (const outcome of choice.outcomes) {
+    cumulative += outcome.probability;
+    if (roll <= cumulative) {
+      outcome.effect();
+      showOutcomeAnimation(outcome.result);
+      break;
+    }
+  }
+  
+  // イベント終了後、次のノードへ
+  proceedToNextNode();
+}
+
+function canAffordCost(cost) {
+  if (!cost) return true;
+  
+  if (cost.gold && player.gold < cost.gold) return false;
+  if (cost.item && !hasItem(cost.item, cost.amount)) return false;
+  if (cost.monster && playerParty.length <= cost.monster) return false;
+  
+  return true;
+}
+
+function payCost(cost) {
+  if (!canAffordCost(cost)) return false;
+  
+  if (cost.gold) player.gold -= cost.gold;
+  if (cost.item) removeItem(cost.item, cost.amount);
+  
+  return true;
+}
+```
+
+-----
+
+## 15. レベル・経験値システム
+
+### 15.1 経験値テーブル
+
+```javascript
+const ExpTable = {
+  // レベルごとに必要な累計経験値
+  1: 0,
+  2: 100,
+  3: 250,
+  4: 450,
+  5: 700,
+  6: 1000,
+  7: 1350,
+  8: 1750,
+  9: 2200,
+  10: 2700,
+  11: 3250,
+  12: 3850,
+  13: 4500,
+  14: 5200,
+  15: 5950,
+  16: 6750,
+  17: 7600,
+  18: 8500,
+  19: 9450,
+  20: 10500
+};
+
+function getExpForNextLevel(currentLevel) {
+  if (currentLevel >= 20) return 0;
+  return ExpTable[currentLevel + 1] - ExpTable[currentLevel];
+}
+
+function getExpToLevel(targetLevel) {
+  return ExpTable[targetLevel] || 0;
+}
+```
+
+### 15.2 レベルアップ処理
+
+```javascript
+function gainExperience(monster, exp) {
+  monster.experience += exp;
+  
+  addLog(`${monster.name} は ${exp} の経験値を獲得！`);
+  
+  // レベルアップチェック
+  let leveledUp = false;
+  while (monster.experience >= getExpToLevel(monster.level + 1)) {
+    if (monster.level >= 20) break;
+    
+    levelUp(monster);
+    leveledUp = true;
+  }
+  
+  return leveledUp;
+}
+
+function levelUp(monster) {
+  monster.level++;
+  
+  // ステータス成長（モンスターの種族値に基づく）
+  const baseGrowth = getBaseGrowthRates(monster.id);
+  const variance = 0.2; // ±20%のランダム性
+  
+  const growth = {
+    hp: Math.floor(baseGrowth.hp * (1 + (Math.random() - 0.5) * variance)),
+    atk: Math.floor(baseGrowth.atk * (1 + (Math.random() - 0.5) * variance)),
+    def: Math.floor(baseGrowth.def * (1 + (Math.random() - 0.5) * variance)),
+    spd: Math.floor(baseGrowth.spd * (1 + (Math.random() - 0.5) * variance))
+  };
+  
+  // ステータス適用
+  Object.keys(growth).forEach(stat => {
+    monster.stats[stat] += growth[stat];
+  });
+  
+  // 現在HPも増加分回復
+  monster.currentHp += growth.hp;
+  
+  // レベルアップ演出
+  showLevelUpAnimation(monster);
+  addLog(`${monster.name} がレベル ${monster.level} になった！`, "important");
+  
+  // ステータス上昇表示
+  addLog(
+    `HP+${growth.hp} ATK+${growth.atk} DEF+${growth.def} SPD+${growth.spd}`
+  );
+  
+  // 特定レベルでスキル習得チャンス
+  if (monster.level === 5 || monster.level === 10 || monster.level === 15) {
+    showSkillLearnDialog(monster);
+  }
+}
+
+// モンスター種族ごとの成長率
+function getBaseGrowthRates(monsterId) {
+  // デフォルト成長率
+  const defaults = {
+    hp: 10,
+    atk: 2,
+    def: 1.5,
+    spd: 1
+  };
+  
+  // 特定モンスターの個別設定
+  const customGrowth = {
+    1: { hp: 8, atk: 3, def: 1, spd: 2 },    // フレイミー（速攻型）
+    3: { hp: 15, atk: 1, def: 3, spd: 0.5 }, // ウォータル（タンク型）
+    5: { hp: 12, atk: 2, def: 2, spd: 1 }    // ハッパンク（バランス型）
+  };
+  
+  return customGrowth[monsterId] || defaults;
+}
+```
+
+-----
+
+## 16. セーブ・ロードシステム
+
+### 16.1 セーブデータフォーマット
+
+```javascript
+const SaveFile = {
+  version: "1.0.0",
+  timestamp: Date.now(),
+  
+  // プレイヤー進捗
+  player: {
+    runs_completed: 15,
+    total_victories: 12,
+    highest_layer_reached: 6,
+    total_playtime: 18000,
+    unlocked_difficulties: ["normal", "hard"]
+  },
+  
+  // 図鑑
+  codex: {
+    unlocked_monsters: [1, 2, 3, 5, 7, 9, 11, 13, 15],
+    monster_stats: {
+      1: {
+        battles_used: 50,
+        victories: 42,
+        total_damage_dealt: 15000
+      }
+    }
+  },
+  
+  // 実績
+  achievements: {
+    unlocked: ["first_victory", "no_damage_run", "fire_master"],
+    progress: {
+      "codex_complete": { current: 9, total: 55 }
+    }
+  },
+  
+  // アンロック済みコンテンツ
+  unlocks: {
+    starter_decks: ["basic_balanced", "fire_rush"],
+    difficulties: ["normal", "hard"],
+    challenge_modes: ["fire_only"]
+  },
+  
+  // 現在進行中のラン
+  current_run: {
+    map_id: "map_forest",
+    difficulty: "normal",
+    current_layer: 3,
+    current_node: "node_08",
+    
+    party: [
+      {
+        id: 1,
+        currentHp: 85,
+        level: 5,
+        experience: 520,
+        equipment: {
+          accessory: "fire_ring",
+          armor: null,
+          boots: null
+        },
+        learned_skills: ["flame_strike", "fire_wave", "heal"],
+        behavior: {
+          priority: "lowest_hp",
+          skill_condition: "always",
+          preferred_skill: 0
+        }
+      }
+    ],
+    
+    gold: 250,
+    inventory: ["potion_hp", "potion_hp", "revive"],
+    cleared_nodes: ["node_01", "node_02", "node_05"],
+    available_nodes: ["node_08", "node_09", "node_10"]
+  },
+  
+  // 設定
+  settings: {
+    volume: {
+      master: 0.8,
+      bgm: 0.6,
+      sfx: 0.7
+    },
+    auto_speed: 2,
+    show_damage_numbers: true,
+    screen_shake: true,
+    show_tutorials: false
+  }
+};
+```
+
+### 16.2 セーブ・ロード関数
+
+```javascript
+// セーブ
+function saveGame() {
+  const saveData = {
+    version: GAME_VERSION,
+    timestamp: Date.now(),
+    player: getPlayerData(),
+    codex: getCodexData(),
+    achievements: getAchievementData(),
+    unlocks: getUnlocksData(),
+    current_run: getCurrentRunData(),
+    settings: getSettings()
+  };
+  
+  try {
+    // localStorageに保存
+    localStorage.setItem('vmo_tactics_save', JSON.stringify(saveData));
+    
+    // バックアップ作成
+    const previousSave = localStorage.getItem('vmo_tactics_save');
+    if (previousSave) {
+      localStorage.setItem('vmo_tactics_backup', previousSave);
+    }
+    
+    showNotification("セーブしました", "success");
+    return true;
+  } catch (error) {
+    console.error("Save failed:", error);
+    showNotification("セーブに失敗しました", "error");
+    return false;
+  }
+}
+
+// ロード
+function loadGame() {
+  try {
+    const saveDataStr = localStorage.getItem('vmo_tactics_save');
+    
+    if (!saveDataStr) {
+      return initNewGame();
+    }
+    
+    const saveData = JSON.parse(saveDataStr);
+    
+    // バージョンチェック
+    if (saveData.version !== GAME_VERSION) {
+      const migrated = migrateOldSave(saveData);
+      if (!migrated) {
+        throw new Error("Migration failed");
+      }
+      return migrated;
+    }
+    
+    // データ復元
+    restorePlayerData(saveData.player);
+    restoreCodexData(saveData.codex);
+    restoreAchievementData(saveData.achievements);
+    restoreUnlocksData(saveData.unlocks);
+    restoreCurrentRun(saveData.current_run);
+    restoreSettings(saveData.settings);
+    
+    showNotification("ロードしました", "success");
+    return true;
+    
+  } catch (error) {
+    console.error("Load failed:", error);
+    showNotification("ロードに失敗しました", "error");
+    
+    // バックアップから復元を試みる
+    return loadBackup();
+  }
+}
+
+// バックアップからロード
+function loadBackup() {
+  try {
+    const backupStr = localStorage.getItem('vmo_tactics_backup');
+    if (!backupStr) {
+      throw new Error("No backup found");
+    }
+    
+    const backupData = JSON.parse(backupStr);
+    
+    // バックアップデータで復元
+    restorePlayerData(backupData.player);
+    restoreCodexData(backupData.codex);
+    restoreAchievementData(backupData.achievements);
+    restoreUnlocksData(backupData.unlocks);
+    restoreCurrentRun(backupData.current_run);
+    restoreSettings(backupData.settings);
+    
+    showNotification("バックアップから復元しました", "warning");
+    return true;
+  } catch (error) {
+    console.error("Backup load failed:", error);
+    showNotification("バックアップからの復元も失敗しました", "error");
+    return initNewGame();
+  }
+}
+
+// オートセーブ
+function enableAutoSave() {
+  // 重要なタイミングで自動保存
+  events.on('node_cleared', () => saveGame());
+  events.on('level_up', () => saveGame());
+  events.on('battle_end', () => saveGame());
+  events.on('shop_purchase', () => saveGame());
+  events.on('run_complete', () => saveGame());
+  
+  // 5分ごとに定期保存
+  setInterval(() => {
+    if (gameState.inRun) {
+      saveGame();
+    }
+  }, 300000);​​​​​​​​​​​​​​​​
+```

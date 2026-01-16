@@ -1,0 +1,742 @@
+@charset "UTF-8";
+
+/**
+ * VMO Tactics - Cyber Dark Theme (Pro Level)
+ * Concept: Tactical Hologram Interface
+ */
+
+:root {
+    /* --- Color Palette --- */
+    --bg-deep: #050507;
+    --bg-panel: rgba(16, 20, 35, 0.85);
+
+    /* Neon Colors */
+    --neon-cyan: #00f3ff;
+    --neon-pink: #bc13fe;
+    --neon-red: #ff2a6d;
+    --neon-yellow: #fcee0a;
+
+    /* Semantic Colors */
+    --primary: var(--neon-cyan);
+    --secondary: var(--neon-pink);
+    --danger: var(--neon-red);
+    --warning: var(--neon-yellow);
+    --text-main: #ffffff;
+    --text-dim: #8b9bb4;
+    --border-glass: rgba(255, 255, 255, 0.1);
+
+    /* --- Effects --- */
+    --glass-blur: blur(12px);
+    --glow-primary: 0 0 10px rgba(0, 243, 255, 0.4), 0 0 20px rgba(0, 243, 255, 0.2);
+    --glow-text: 0 0 5px rgba(255, 255, 255, 0.5);
+    --scanline-color: rgba(0, 0, 0, 0.5);
+
+    /* --- Sizing --- */
+    --grid-size: 80px;
+    --gap-size: 10px;
+    --header-height: 60px;
+}
+
+/* --- Global Reset & Typography --- */
+* {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    margin: 0;
+    padding: 0;
+    outline: none;
+}
+
+body {
+    font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+    background-color: var(--bg-deep);
+    color: var(--text-main);
+    height: 100dvh; /* 動的ビューポート高さを採用 */
+    width: 100vw;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: fixed; /* 全体のスクロールを禁止 */
+    touch-action: none;
+
+    /* Background Grid Texture */
+    background-image:
+        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background-size: 100% 2px, 3px 100%;
+}
+
+/* --- Main Container --- */
+#game-container {
+    width: 100%;
+    max-width: 480px;
+    height: 100dvh;
+    position: relative;
+    /* セーフエリアの確保 */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: radial-gradient(circle at center, #1a1f35 0%, #050507 100%);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #333;
+}
+
+/* Desktop Polish: Add border if not on mobile */
+@media (min-width: 481px) {
+    #game-container {
+        height: 90vh;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+}
+
+/* Scanline Overlay (Vignette & Scanlines) */
+#game-container::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255,0,0,0.03), rgba(0,255,0,0.01), rgba(0,0,255,0.03));
+    background-size: 100% 3px, 3px 100%;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.6;
+}
+
+/* --- Utilities --- */
+.hidden { display: none !important; opacity: 0; pointer-events: none; }
+.active { display: flex !important; opacity: 1; pointer-events: auto; }
+
+/* --- Buttons (Cyberpunk Style) --- */
+button {
+    position: relative;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: 1px solid var(--primary);
+    background: rgba(0, 243, 255, 0.05);
+    color: var(--primary);
+    padding: 12px 24px;
+    transition: all 0.2s ease;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    overflow: hidden;
+}
+
+button::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: 0.5s;
+}
+
+button:hover {
+    background: rgba(0, 243, 255, 0.15);
+    box-shadow: var(--glow-primary);
+    text-shadow: 0 0 8px var(--primary);
+    border-color: #fff;
+}
+
+button:hover::before {
+    left: 100%;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+/* Primary Button */
+.btn-primary {
+    background: var(--primary);
+    color: #000;
+    border: none;
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+}
+.btn-primary:hover {
+    background: #fff;
+    color: #000;
+    box-shadow: 0 0 25px rgba(0, 243, 255, 0.8);
+}
+
+/* Secondary Button */
+.btn-secondary {
+    border-color: var(--text-dim);
+    color: var(--text-dim);
+    background: transparent;
+}
+.btn-secondary:hover {
+    border-color: var(--text-main);
+    color: var(--text-main);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+/* Warning/Action Button */
+.btn-warning {
+    border-color: var(--warning);
+    color: var(--warning);
+    background: rgba(252, 238, 10, 0.05);
+}
+.btn-warning:hover {
+    background: var(--warning);
+    color: #000;
+    box-shadow: 0 0 20px var(--warning);
+}
+
+/* Tiny Button */
+.btn-tiny {
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    clip-path: none;
+    border-radius: 2px;
+}
+
+.btn-small {
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-glass);
+    background: rgba(0,0,0,0.3);
+    color: var(--text-dim);
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+/* --- Screen Layout --- */
+.screen {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    /* paddingを上下0に。左右のみ確保し、内部要素で高さを制御 */
+    padding: 0 20px;
+    position: absolute;
+    top: 0; left: 0;
+    background: transparent;
+    animation: fadeIn 0.4s ease-out;
+    overflow: hidden; /* スクリーン自体はみ出さない */
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* --- Header --- */
+.screen-header {
+    flex-shrink: 0; /* ヘッダーは潰さない */
+    height: var(--header-height);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-glass);
+    background: linear-gradient(90deg, rgba(0, 243, 255, 0.05) 0%, transparent 100%);
+    /* 余白の調整 */
+    margin: 0 -20px 10px -20px;
+    padding: 0 20px;
+}
+
+.screen-header h2 {
+    font-size: 1.2rem;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: var(--glow-text);
+}
+
+.header-info {
+    font-family: monospace;
+    color: var(--text-dim);
+    display: flex;
+    gap: 15px;
+}
+
+.header-info span {
+    color: var(--secondary);
+    font-weight: bold;
+}
+
+/* --- Title Screen --- */
+#screen-title {
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at center, #1a2035 0%, #050507 80%);
+}
+
+.title-logo {
+    margin-bottom: 4rem;
+    text-align: center;
+    position: relative;
+}
+
+.title-logo h1 {
+    font-size: 3rem;
+    font-weight: 900;
+    color: transparent;
+    -webkit-text-stroke: 1px var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 6px;
+    filter: drop-shadow(0 0 10px rgba(0, 243, 255, 0.5));
+    animation: glitch 3s infinite;
+}
+
+.title-logo p {
+    color: var(--text-dim);
+    letter-spacing: 4px;
+    font-size: 0.8rem;
+    margin-top: 10px;
+    text-transform: uppercase;
+}
+
+.menu-buttons {
+    width: 100%;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.version-info {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    font-family: monospace;
+    font-size: 0.7rem;
+    color: #333;
+}
+
+/* --- Battle Screen --- */
+.battle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-family: monospace;
+}
+
+.turn-indicator {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 12px;
+    border-left: 3px solid var(--primary);
+    color: var(--text-main);
+}
+
+.battle-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    /* 3D Perspective Look */
+    transform-style: preserve-3d;
+    perspective: 1000px;
+}
+
+.grid-area {
+    display: grid;
+    grid-template-columns: repeat(3, var(--grid-size));
+    grid-template-rows: repeat(3, var(--grid-size));
+    gap: var(--gap-size);
+    padding: 15px;
+    background: rgba(0, 243, 255, 0.02);
+    border: 1px solid var(--border-glass);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5) inset;
+    border-radius: 4px;
+    /* Subtle tilt for tactics feel */
+    transform: rotateX(10deg);
+}
+
+/* Individual Grid Cells (for empty slots visual) */
+.grid-area > div {
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.field-divider {
+    width: 90%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--danger), transparent);
+    border: none;
+    margin: 20px 0;
+    position: relative;
+    opacity: 0.5;
+}
+
+.battle-footer {
+    flex-shrink: 0; /* フッターを固定 */
+    height: 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 10px;
+}
+
+.log-area {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--border-glass);
+    border-left: 2px solid var(--secondary);
+    padding: 10px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    overflow-y: auto;
+    /* Custom Scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: var(--secondary) #000;
+}
+
+/* --- Map & Starter (Scroll Content) --- */
+.scroll-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    touch-action: pan-y; /* スクロール領域のみ入力を許可 */
+}
+
+.map-area {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background:
+        radial-gradient(circle, rgba(0, 243, 255, 0.05) 1px, transparent 1px) 0 0 / 20px 20px;
+    border: 1px solid var(--border-glass);
+    border-radius: 4px;
+    position: relative;
+}
+
+/* --- Modal (Glassmorphism) --- */
+#modal-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#modal-box {
+    width: 90%;
+    max-width: 380px;
+    background: rgba(16, 20, 30, 0.9);
+    border: 1px solid var(--primary);
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.15), inset 0 0 20px rgba(0, 0, 0, 0.5);
+    padding: 2px; /* For double border effect */
+    position: relative;
+    animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Tech corners for modal */
+#modal-box::after {
+    content: '';
+    position: absolute;
+    top: -2px; left: -2px; right: -2px; bottom: -2px;
+    background:
+        linear-gradient(to right, var(--primary) 2px, transparent 2px) 0 0,
+        linear-gradient(to bottom, var(--primary) 2px, transparent 2px) 0 0,
+        linear-gradient(to left, var(--primary) 2px, transparent 2px) 100% 0,
+        linear-gradient(to bottom, var(--primary) 2px, transparent 2px) 100% 0,
+        linear-gradient(to left, var(--primary) 2px, transparent 2px) 100% 100%,
+        linear-gradient(to top, var(--primary) 2px, transparent 2px) 100% 100%,
+        linear-gradient(to right, var(--primary) 2px, transparent 2px) 0 100%,
+        linear-gradient(to top, var(--primary) 2px, transparent 2px) 0 100%;
+    background-size: 10px 10px;
+    background-repeat: no-repeat;
+    pointer-events: none;
+}
+
+.modal-inner {
+    background: var(--bg-deep);
+    padding: 20px;
+    clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
+}
+
+#modal-title {
+    color: var(--primary);
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+}
+
+#modal-content {
+    color: #ddd;
+    line-height: 1.6;
+    margin-bottom: 20px;
+}
+
+#modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* --- Toast (Notification) --- */
+#toast-container {
+    position: absolute;
+    top: 70px; /* Below header */
+    right: 20px;
+    width: 280px;
+    z-index: 3000;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    background: rgba(10, 10, 15, 0.95);
+    color: #fff;
+    padding: 12px 16px;
+    border: 1px solid #333;
+    border-left: 4px solid var(--primary);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    font-size: 0.85rem;
+    pointer-events: auto;
+    position: relative;
+    overflow: hidden;
+    animation: slideInRight 0.3s ease-out;
+}
+
+.toast::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);
+    pointer-events: none;
+}
+
+.toast.success { border-left-color: var(--neon-cyan); color: var(--neon-cyan); }
+.toast.error { border-left-color: var(--neon-red); color: var(--neon-red); }
+.toast.warning { border-left-color: var(--warning); color: var(--warning); }
+
+/* --- Animations --- */
+@keyframes glitch {
+    2%, 64% { transform: translate(2px,0) skew(0deg); }
+    4%, 60% { transform: translate(-2px,0) skew(0deg); }
+    62% { transform: translate(0,0) skew(5deg); }
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes modalPop {
+    0% { opacity: 0; transform: scale(0.7); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* --- Scrollbar Styling --- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #050505; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* --- Starter Selection Cards --- */
+.starter-card {
+    background: rgba(16, 20, 30, 0.8);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.starter-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 4px; height: 100%;
+    background: var(--primary);
+    opacity: 0.5;
+}
+
+.starter-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(0, 243, 255, 0.15);
+    border-color: var(--primary);
+}
+
+.starter-card:hover::before {
+    opacity: 1;
+    box-shadow: 0 0 10px var(--primary);
+}
+
+.card-header h3 {
+    color: var(--primary);
+    margin: 0;
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.card-body p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+
+.deck-icons {
+    display: flex;
+    gap: 10px;
+    background: rgba(0,0,0,0.3);
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.mini-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #444;
+    background: #000;
+}
+
+.mini-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* --- Map Visuals (Vertical Slay the Spire Style) --- */
+#map-visual-area {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, #111 0%, #1a1a2e 100%);
+    overflow-y: auto;
+    /* Hide scrollbar but keep functionality */
+    scrollbar-width: none;
+}
+#map-visual-area::-webkit-scrollbar { display: none; }
+
+/* SVG Lines */
+.map-connections {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    min-height: 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Nodes */
+.map-node {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    transform: translate(-50%, -50%); /* Center based on coords */
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    z-index: 10;
+    background: #222;
+    border: 2px solid #555;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* Node Status */
+.map-node.locked {
+    opacity: 0.3;
+    filter: grayscale(100%);
+    cursor: default;
+}
+
+.map-node.available {
+    border-color: var(--primary);
+    box-shadow: 0 0 15px var(--primary);
+    background: rgba(0, 243, 255, 0.1);
+    color: #fff;
+    z-index: 11;
+}
+
+.map-node.cleared {
+    border-color: var(--text-dim);
+    background: #111;
+    color: #444;
+    opacity: 0.8;
+}
+
+/* Special Node Styles */
+.node-boss { width: 60px; height: 60px; font-size: 2rem; border-color: var(--danger); }
+.node-start { border-color: var(--secondary); }
+
+/* Animations */
+.pulse-anim {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 10px var(--primary); }
+    50% { transform: translate(-50%, -50%) scale(1.15); box-shadow: 0 0 25px var(--primary); }
+    100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 10px var(--primary); }
+}
+
+/* --- Party Status Bar (Footer) --- */
+.party-status-bar {
+    height: 70px;
+    background: rgba(10, 10, 15, 0.95);
+    border-top: 1px solid var(--border-glass);
+    padding: 0 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#mini-party-view {
+    display: flex;
+    gap: 15px;
+}
+
+.mini-unit {
+    position: relative;
+    width: 40px;
+    height: 40px;
+}
+
+.mini-unit img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #444;
+}
+
+.mini-hp-bar {
+    position: absolute;
+    bottom: -6px;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+}
+
+.mini-hp-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+}

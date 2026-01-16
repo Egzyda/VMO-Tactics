@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VMO Tactics</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="game-container">
+    <div id="modal-overlay" class="hidden">
+        <div id="modal-box">
+            <h3 id="modal-title">Title</h3>
+            <div id="modal-content">Content goes here...</div>
+            <div id="modal-actions">
+                </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <div id="screens">
+
+        <section id="screen-title" class="screen active">
+            <div class="title-logo">
+                <h1>VMO TACTICS</h1>
+                <p>Tactical Rogue-lite Auto Battler</p>
+            </div>
+            <div class="menu-buttons">
+                <button class="btn-primary" onclick="Game.startNewRun()">新しい遠征を始める</button>
+                <button class="btn-secondary" onclick="Game.showCodex()">図鑑を見る</button>
+                <button class="btn-secondary" onclick="Game.showSettings()">設定</button>
+            </div>
+            <div class="version-info">Ver 1.0.0</div>
+        </section>
+
+        <section id="screen-starter" class="screen hidden">
+            <header class="screen-header">
+                <h2>スターターデッキ選択</h2>
+                <button class="btn-small" onclick="Game.switchScreen('screen-title')">戻る</button>
+            </header>
+            <div id="starter-container" class="scroll-content">
+                </div>
+        </section>
+
+        <section id="screen-map" class="screen hidden">
+            <header class="screen-header">
+                <div class="header-info">
+                    <span id="map-layer-info">Layer 1</span>
+                    <span id="player-gold">💰 0</span>
+                </div>
+                <button class="btn-small" onclick="Game.openSystemMenu()">メニュー</button>
+            </header>
+            <div id="map-visual-area" class="map-area">
+                </div>
+            <footer class="party-status-bar">
+                <div id="mini-party-view">
+                    </div>
+            </footer>
+        </section>
+
+        <section id="screen-battle" class="screen hidden">
+            <div class="battle-header">
+                <div class="turn-indicator">Turn <span id="battle-turn">1</span></div>
+                <div class="speed-controls">
+                    <button class="btn-tiny" onclick="Battle.setSpeed(1)">x1</button>
+                    <button class="btn-tiny" onclick="Battle.setSpeed(2)">x2</button>
+                </div>
+            </div>
+
+            <div class="battle-field">
+                <div id="enemy-grid" class="grid-area"></div>
+                <hr class="field-divider">
+                <div id="player-grid" class="grid-area"></div>
+            </div>
+
+            <div class="battle-footer">
+                <div id="battle-log" class="log-area">
+                    <p>戦闘開始...</p>
+                </div>
+                <button id="btn-timeout" class="btn-warning" onclick="Battle.triggerTimeout()">⏸ タイムアウト</button>
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<script src="monsters.js"></script>
+<script src="moves.js"></script>
+
+<script src="ui.js"></script>
+<script src="mechanics.js"></script>
+<script src="systems.js"></script>
+<script src="map.js"></script>
+<script src="battle.js"></script>
+<script src="main.js"></script>
+
+</body>
+</html>
